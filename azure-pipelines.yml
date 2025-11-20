@@ -2,63 +2,43 @@ trigger:
 - main
 
 pool:
-  vmImage: ubuntu-latest
-
-variables:
-  imageName: 'sample-app'
+  name: cluster-pool
 
 steps:
-
-# Checkout code
 - checkout: self
 
-# Install Trivy (Security Scanner)
-- script: |
-    sudo apt-get update
-    sudo apt-get install -y wget
-    wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
-    sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
-  displayName: Install Trivy Scanner
-
-# Code Scan (SAST)
-- script: |
-    trivy fs --severity HIGH,CRITICAL --exit-code 0 .
-  displayName: Code Scan (SAST)
+# Login to Docker Hub
+- task: Docker@2
+  displayName: Login to Docker Hub
+  inputs:
+    command: login
+    containerRegistry: dockerhub-connection   # your Docker Hub service connection name
 
 # Build Docker Image
-- script: |
-    docker build -t $(dockerId)/$(imageName):$(Build.BuildId) ./app
+- task: Docker@2
   displayName: Build Docker Image
+  inputs:
+    command: build
+    Dockerfile: Dockerfile
+    repository: prasanthrajrp/nginx-webapp
+    tags: |
+      latest
+      $(Build.BuildId)
 
-# Image Scan
-- script: |
-    trivy image --exit-code 0 $(dockerId)/$(imageName):$(Build.BuildId)
-  displayName: Scan Docker Image
-
-# Docker Login
-- script: |
-    echo $(dockerPassword) | docker login -u $(dockerId) --password-stdin
-  displayName: Login to Docker Registry
-
-# Push Docker Image
-- script: |
-    docker push $(dockerId)/$(imageName):$(Build.BuildId)
+# Push Docker Image to Docker Hub
+- task: Docker@2
   displayName: Push Docker Image
-
-# Deploy to Kubernetes
-- task: Kubernetes@1
   inputs:
-    connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'my-k8s-conn'
-    command: apply
-    useConfigurationFile: true
-    configuration: 'k8s/deployment.yaml'
+    command: push
+    repository: prasanthrajrp/nginx-webapp
+    tags: |
+      latest
+      $(Build.BuildId)
+    containerRegistry: dockerhub-connection
 
-- task: Kubernetes@1
-  inputs:
-    connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'my-k8s-conn'
-    command: apply
-    useConfigurationFile: true
-    configuration: 'k8s/service.yaml'
-
+# Deploy to Kubernetes (sample-app namespace)
+- script: |
+    kubectl set image deployment/nginx-webapp \
+      nginx-webapp=prasanthrajrp/nginx-webapp:$(Build.BuildId) \
+      -n sample-app
+  displayName: Deploy to Kubernetes (sample-app namespace)
