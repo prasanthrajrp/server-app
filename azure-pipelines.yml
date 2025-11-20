@@ -38,7 +38,8 @@ steps:
 
 # Deploy to Kubernetes (sample-app namespace)
 - script: |
-    kubectl set image deployment/nginx-webapp \
-      nginx-webapp=prasanthrajrp/nginx-webapp:$(Build.BuildId) \
+    kubectl set image deployment/sample-app \
+      sample-app=prasanthrajrp/sample-app:$(Build.BuildId) \
       -n sample-app
   displayName: Deploy to Kubernetes (sample-app namespace)
+
